@@ -1,6 +1,6 @@
 # MUDCERTs library, web interface, and CLI interface
 
-![image of mud and a lock](https://github.com/iot-onboarding/mudcerts/mudcerts.png)
+![image of mud and a lock](https://github.com/iot-onboarding/mudcerts/blob/main/mudcerts.png?raw=true)
 
 Welcome to MUDCERTS!  This repository contains a golang library and some
 example uses to sign and verify certificates that contain the
