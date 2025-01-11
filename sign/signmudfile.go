@@ -21,7 +21,7 @@ import (
 	"encoding/pem"
 	"flag"
 	"log"
-	. "mudmaker.org/mudcerts"
+	. "github.com/iot-onboarding/mudcerts"
 	"os"
 	"regexp"
 )
