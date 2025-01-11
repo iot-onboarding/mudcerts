@@ -1,4 +1,4 @@
-module mudmaker.org/mudcerts
+module github.com/iot-onboarding/mudcerts
 
 go 1.23.3
 

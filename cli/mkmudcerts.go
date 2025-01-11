@@ -44,7 +44,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	. "mudmaker.org/mudcerts"
+	. "github.com/iot-onboarding/mudcerts"
 )
 
 func main() {
