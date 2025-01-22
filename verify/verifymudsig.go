@@ -15,12 +15,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 package main
+
 /*
 verifymudsig verifies a MUD signature on a file, with a given cert set.
 
 Usage:
 
-  verifymudsig [flags]
+  verifymudsig [flags] {mud file to be verified}
 
 The flags are as follows:
 
@@ -36,14 +37,15 @@ import (
 	"encoding/pem"
 	"flag"
 	"fmt"
-	cms "github.com/github/smimesign/ietf-cms"
 	"log"
 	"os"
+
+	cms "github.com/github/smimesign/ietf-cms"
 )
 
 func main() {
 	certfile := flag.String("cert", "signer.pem",
-		"Name of file containing one or more signing certs")
+		"Name of file containing one or more certificates, including a trust anchor (CA Cert)")
 	sigfile := flag.String("sig", "mudfile.p7s",
 		"name of file containing DER signature.")
 	flag.Parse()
@@ -78,7 +80,7 @@ func main() {
 	}
 
 	if flag.NArg() != 1 {
-		log.Fatal("No available file")
+		log.Fatal("No data file specified: provide filename of mud file to be verified.")
 	}
 
 	mudfile, err := os.ReadFile(flag.Args()[0])
