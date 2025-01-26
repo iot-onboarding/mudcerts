@@ -83,9 +83,23 @@ certificates, review IEEE 802.1AR standard at
 https://standards.ieee.org/ieee/802.1AR/6995.
 `
 
-// postMUD processes a POST on /mudzip and returns a zip file.
+// postMUD processes a POST on /mudzip with a base64-encoded MUD file
+// and returns a zip file.
 func postMUD(c *gin.Context) {
+	processResponse(c, true)
+}
+
+// postMUDNoB64MUD processes a POST on mudNob64ZIP with a JSON string
+// and returns a zip file.
+func postNoB64MUD(c *gin.Context) {
+	processResponse(c, false)
+}
+
+// processResponse takes the actual input and based on doB64 either
+// takes base64 input or a JSON string to produce a zip file.
+func processResponse(c *gin.Context, dob64 bool) {
 	var pinfo ProductInfo
+	var mudjson string
 
 	if err := c.BindJSON(&pinfo); err != nil {
 		return
@@ -121,9 +135,18 @@ func postMUD(c *gin.Context) {
 	mudsignerPrivBytes, _ := x509.MarshalECPrivateKey(mudsignerPrivKey)
 	mudsignerPrivKeyPEM := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
 
-	mudjson, err := base64.StdEncoding.DecodeString(pinfo.Mudfile)
+	if dob64 == true {
+		mudbytes, err := base64.StdEncoding.DecodeString(pinfo.Mudfile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		mudjson = string(mudbytes)
+	} else {
+		mudjson = pinfo.Mudfile
+	}
+
 	mudsigncert, err := x509.ParseCertificate(mudsigner)
-	mudsig, err := SignMudFile(string(mudjson), mudsigncert, mudsignerPrivKey)
+	mudsig, err := SignMudFile(mudjson, mudsigncert, mudsignerPrivKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -182,5 +205,6 @@ func main() {
 	router := gin.Default()
 	router.SetTrustedProxies(nil)
 	router.POST("/mudzip", postMUD)
+	router.POST("/mudnob64zip", postNoB64MUD)
 	router.Run(":8085")
 }
