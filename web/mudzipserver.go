@@ -66,7 +66,7 @@ You can verifiy the signature of the MUD file with the following openssl
 command:
 
  % openssl cms -verify -in YOURDEVICE.p7s -inform DER -content YOURDEVICE.json \
-    -CAfile ca.pem -purpose any -out /dev/null
+    -CAfile ca.pem -purpose any -binary -out /dev/null
 
 The source code used to build the zip file can be found at the following location:
 https://github.com/iot-onboarding/mudcerts
