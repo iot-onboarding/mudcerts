@@ -83,49 +83,92 @@ certificates, review IEEE 802.1AR standard at
 https://standards.ieee.org/ieee/802.1AR/6995.
 `
 
+// httpError logs the error server-side and returns a JSON error body to the
+// client with the given HTTP status, aborting any further handler processing.
+func httpError(c *gin.Context, status int, msg string, err error) {
+	log.Printf("mudzip %s: %v", msg, err)
+	c.AbortWithStatusJSON(status, gin.H{"error": msg})
+}
+
 // postMUD processes a POST on /mudzip and returns a zip file.
 func postMUD(c *gin.Context) {
 	var pinfo ProductInfo
 
 	if err := c.BindJSON(&pinfo); err != nil {
+		httpError(c, http.StatusBadRequest, "invalid JSON body", err)
+		return
+	}
+
+	if pinfo.Model == "" {
+		httpError(c, http.StatusBadRequest, "missing required field: Model", nil)
+		return
+	}
+	if pinfo.Mudfile == "" {
+		httpError(c, http.StatusBadRequest, "missing required field: Mudfile", nil)
+		return
+	}
+
+	mudjson, err := base64.StdEncoding.DecodeString(pinfo.Mudfile)
+	if err != nil {
+		httpError(c, http.StatusBadRequest, "Mudfile is not valid base64", err)
 		return
 	}
 
 	cabytes, caPrivKey, err := GenCA(pinfo)
 	if err != nil {
-		log.Fatal(err)
+		httpError(c, http.StatusInternalServerError, "failed to generate CA", err)
+		return
 	}
 
 	cacert, err := x509.ParseCertificate(cabytes)
 	if err != nil {
-		log.Fatal(err)
+		httpError(c, http.StatusInternalServerError, "failed to parse CA certificate", err)
+		return
 	}
 
 	capem := MakePEM(cabytes, "CERTIFICATE")
 	mudcert, mudcertPrivKey, err := MakeMUDcert(pinfo, cacert, caPrivKey)
 	if err != nil {
-		log.Fatal(err)
+		httpError(c, http.StatusInternalServerError, "failed to create MUD certificate", err)
+		return
 	}
 
 	mudsigner, mudsignerPrivKey, err := MakeSignerCert(pinfo, cacert, caPrivKey)
 	if err != nil {
-		log.Fatal(err)
+		httpError(c, http.StatusInternalServerError, "failed to create MUD signer certificate", err)
+		return
 	}
 
 	mudcertpem := MakePEM(mudcert, "CERTIFICATE")
 	mudsignerpem := MakePEM(mudsigner, "CERTIFICATE")
-	caPrivBytes, _ := x509.MarshalECPrivateKey(caPrivKey)
+	caPrivBytes, err := x509.MarshalECPrivateKey(caPrivKey)
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to marshal CA private key", err)
+		return
+	}
 	caPrivkeyPEM := MakePEM(caPrivBytes, "PRIVATE KEY")
-	mudPrivBytes, _ := x509.MarshalECPrivateKey(mudcertPrivKey)
+	mudPrivBytes, err := x509.MarshalECPrivateKey(mudcertPrivKey)
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to marshal MUD private key", err)
+		return
+	}
 	mudPrivKeyPEM := MakePEM(mudPrivBytes, "PRIVATE KEY")
-	mudsignerPrivBytes, _ := x509.MarshalECPrivateKey(mudsignerPrivKey)
+	mudsignerPrivBytes, err := x509.MarshalECPrivateKey(mudsignerPrivKey)
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to marshal MUD signer private key", err)
+		return
+	}
 	mudsignerPrivKeyPEM := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
 
-	mudjson, err := base64.StdEncoding.DecodeString(pinfo.Mudfile)
 	mudsigncert, err := x509.ParseCertificate(mudsigner)
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to parse MUD signer certificate", err)
+		return
+	}
 	mudsig, err := SignMudFile(string(mudjson), mudsigncert, mudsignerPrivKey)
 	if err != nil {
-		log.Fatal(err)
+		httpError(c, http.StatusInternalServerError, "failed to sign MUD file", err)
+		return
 	}
 
 	re := regexp.MustCompile(`YOURDEVICE`)
@@ -149,27 +192,28 @@ func postMUD(c *gin.Context) {
 	for _, file := range files {
 		f, err := w.Create(file.Name)
 		if err != nil {
-			log.Fatal(err)
+			httpError(c, http.StatusInternalServerError, "failed to create zip entry", err)
+			return
 		}
 		_, err = f.Write([]byte(file.Body))
 		if err != nil {
-			log.Fatal(err)
+			httpError(c, http.StatusInternalServerError, "failed to write zip entry", err)
+			return
 		}
 	}
 	f, err := w.Create(pinfo.Model + ".p7s")
 	if err != nil {
-		log.Fatal(err)
+		httpError(c, http.StatusInternalServerError, "failed to create signature zip entry", err)
+		return
 	}
 
-	_, err = f.Write(mudsig)
-
-	if err != nil {
-		log.Fatal(err)
+	if _, err = f.Write(mudsig); err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to write signature zip entry", err)
+		return
 	}
-	err = w.Close()
-
-	if err != nil {
-		log.Fatal(err)
+	if err = w.Close(); err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to finalize zip archive", err)
+		return
 	}
 
 	c.Header("Content-Disposition", "attachment; filename=\""+pinfo.Model+".zip"+"\"")
