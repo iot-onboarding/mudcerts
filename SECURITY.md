@@ -10,15 +10,16 @@ SPDX-License-Identifier: Apache-2.0
 This document outlines security procedures and general policies for the
 Tie Die project.
 
-- [Reporting a Bug](#reporting-a-bug)
-- [Disclosure Policy](#disclosure-policy)
-- [Comments on this Policy](#comments-on-this-policy)
+- [Security Policies and Procedures](#security-policies-and-procedures)
+  - [Reporting a Bug](#reporting-a-bug)
+  - [Disclosure Policy](#disclosure-policy)
+  - [Comments on this Policy](#comments-on-this-policy)
 
 ## Reporting a Bug
 
-The Tie Die team and community take all security bugs in
-Tie Die seriously. Thank you for improving the security of
-Tie Die. We appreciate your efforts and responsible disclosure and
+The MUD team and community take all security bugs in
+these tools seriously. Thank you for improving the security of
+MUDCERTS. We appreciate your efforts and responsible disclosure and
 will make every effort to acknowledge your contributions.
 
 Report security bugs by emailing `mud@ietf.org`.
