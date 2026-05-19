@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -149,5 +150,80 @@ func TestPostMUDBodyTooLarge(t *testing.T) {
 
 	if w.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, body = %q; want 413", w.Code, w.Body.String())
+	}
+}
+
+// validPInfo returns a ProductInfo that passes validateProductInfo, so
+// individual tests can mutate one field to exercise a single rule.
+func validPInfo() ProductInfo {
+	mudjson := `{"ietf-mud:mud":{"mud-version":1,"mud-url":"https://example.com/test.json"}}`
+	return ProductInfo{
+		Manufacturer: "ACME Supplies",
+		Model:        "TestDevice",
+		CountryCode:  "US",
+		MudUrl:       "https://example.com/test.json",
+		SerialNumber: "SN-0001",
+		EmailAddress: "signer@example.com",
+		Mudfile:      base64.StdEncoding.EncodeToString([]byte(mudjson)),
+	}
+}
+
+func postPInfo(t *testing.T, p ProductInfo) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/mudzip", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	newTestRouter().ServeHTTP(w, req)
+	return w
+}
+
+// TestValidateProductInfoRejects exercises each validation rule on the
+// /mudzip endpoint. Every case is expected to return 400 without invoking
+// any of the crypto routines.
+func TestValidateProductInfoRejects(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(p *ProductInfo)
+	}{
+		{"empty Model", func(p *ProductInfo) { p.Model = "" }},
+		{"Model with slash", func(p *ProductInfo) { p.Model = "../etc/passwd" }},
+		{"Model with quote", func(p *ProductInfo) { p.Model = `bad"name` }},
+		{"Model with CRLF", func(p *ProductInfo) { p.Model = "x\r\ny" }},
+		{"Model with space", func(p *ProductInfo) { p.Model = "Test Device" }},
+		{"Model too long", func(p *ProductInfo) { p.Model = strings.Repeat("a", 65) }},
+		{"empty Manufacturer", func(p *ProductInfo) { p.Manufacturer = "" }},
+		{"Manufacturer with control char", func(p *ProductInfo) { p.Manufacturer = "ACME\x01" }},
+		{"lowercase CountryCode", func(p *ProductInfo) { p.CountryCode = "us" }},
+		{"3-char CountryCode", func(p *ProductInfo) { p.CountryCode = "USA" }},
+		{"empty CountryCode", func(p *ProductInfo) { p.CountryCode = "" }},
+		{"http MudUrl", func(p *ProductInfo) { p.MudUrl = "http://example.com/x.json" }},
+		{"non-URL MudUrl", func(p *ProductInfo) { p.MudUrl = "not a url" }},
+		{"empty MudUrl", func(p *ProductInfo) { p.MudUrl = "" }},
+		{"bad EmailAddress", func(p *ProductInfo) { p.EmailAddress = "not-an-email" }},
+		{"empty Mudfile", func(p *ProductInfo) { p.Mudfile = "" }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := validPInfo()
+			tc.mut(&p)
+			w := postPInfo(t, p)
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, body = %q; want 400", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// TestValidateProductInfoAccepts confirms the baseline ProductInfo built
+// by validPInfo passes validation end-to-end (200 + zip body).
+func TestValidateProductInfoAccepts(t *testing.T) {
+	w := postPInfo(t, validPInfo())
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q; want 200", w.Code, w.Body.String())
 	}
 }

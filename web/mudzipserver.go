@@ -37,8 +37,11 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -72,6 +75,69 @@ func isBodyTooLarge(err error) bool {
 		return true
 	}
 	return strings.Contains(err.Error(), "request body too large")
+}
+
+// modelRe restricts pinfo.Model to a path- and header-safe character set.
+// Model is concatenated into zip entry names and the Content-Disposition
+// filename, so any control characters, quotes, slashes, or whitespace
+// would enable injection (CWE-22 / CWE-93).
+var modelRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+
+// printableField requires 1..max printable, non-control characters and
+// forbids CR/LF entirely. Used for free-form text fields that end up
+// inside X.509 subject components.
+func printableField(s string, max int) bool {
+	if s == "" || len(s) > max {
+		return false
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+// validateProductInfo enforces server-side constraints on every field
+// before any crypto or zip work is performed. Returning a descriptive
+// error lets the caller surface a 400 to the client.
+func validateProductInfo(p ProductInfo) error {
+	if !modelRe.MatchString(p.Model) {
+		return fmt.Errorf("Model must match %s", modelRe)
+	}
+	if !printableField(p.Manufacturer, 64) {
+		return errors.New("Manufacturer must be 1-64 printable characters")
+	}
+	if len(p.CountryCode) != 2 ||
+		p.CountryCode[0] < 'A' || p.CountryCode[0] > 'Z' ||
+		p.CountryCode[1] < 'A' || p.CountryCode[1] > 'Z' {
+		return errors.New("CountryCode must be exactly 2 uppercase ASCII letters")
+	}
+	if p.SerialNumber != "" && !printableField(p.SerialNumber, 64) {
+		return errors.New("SerialNumber must be 1-64 printable characters")
+	}
+	if p.MudUrl == "" {
+		return errors.New("MudUrl is required")
+	}
+	if len(p.MudUrl) > 255 {
+		return errors.New("MudUrl must be <= 255 characters")
+	}
+	u, err := url.Parse(p.MudUrl)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return errors.New("MudUrl must be a valid https:// URL")
+	}
+	if p.EmailAddress != "" {
+		if !printableField(p.EmailAddress, 254) {
+			return errors.New("EmailAddress contains invalid characters")
+		}
+		if _, err := mail.ParseAddress(p.EmailAddress); err != nil {
+			return errors.New("EmailAddress is not a valid address")
+		}
+	}
+	if p.Mudfile == "" {
+		return errors.New("Mudfile is required")
+	}
+	return nil
 }
 
 var READMEsrc string = `
@@ -133,12 +199,8 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
-	if pinfo.Model == "" {
-		httpError(c, http.StatusBadRequest, "missing required field: Model", nil)
-		return
-	}
-	if pinfo.Mudfile == "" {
-		httpError(c, http.StatusBadRequest, "missing required field: Mudfile", nil)
+	if err := validateProductInfo(pinfo); err != nil {
+		httpError(c, http.StatusBadRequest, err.Error(), err)
 		return
 	}
 
