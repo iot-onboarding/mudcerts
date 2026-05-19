@@ -1,6 +1,6 @@
 name: RunChecks
 
-on:
+"on":
   push:
   pull_request:
 
