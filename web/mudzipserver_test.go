@@ -24,10 +24,12 @@ import (
 	. "github.com/iot-onboarding/mudcerts"
 )
 
-// newTestRouter builds a gin router wired up the same way main() does.
+// newTestRouter builds a gin router wired up the same way main() does,
+// including the body-size limit middleware.
 func newTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	r.Use(limitBody(maxRequestBytes))
 	r.POST("/mudzip", postMUD)
 	return r
 }
@@ -126,5 +128,26 @@ func TestPostMUDProducesZip(t *testing.T) {
 	}
 	if string(data) != mudjson {
 		t.Errorf("mud json = %q, want %q", string(data), mudjson)
+	}
+}
+
+// TestPostMUDBodyTooLarge verifies that requests exceeding the body-size
+// limit are rejected with 413 and that the handler does not perform any
+// expensive crypto work.
+func TestPostMUDBodyTooLarge(t *testing.T) {
+	// A body larger than maxRequestBytes but still well-formed JSON
+	// structure (the size comes from a giant Mudfile field).
+	oversize := bytes.Repeat([]byte("A"), maxRequestBytes+1024)
+	body := append([]byte(`{"Model":"x","Mudfile":"`), oversize...)
+	body = append(body, []byte(`"}`)...)
+
+	req := httptest.NewRequest(http.MethodPost, "/mudzip", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	newTestRouter().ServeHTTP(w, req)
+
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, body = %q; want 413", w.Code, w.Body.String())
 	}
 }

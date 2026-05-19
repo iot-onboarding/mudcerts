@@ -36,13 +36,43 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/base64"
+	"errors"
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	. "github.com/iot-onboarding/mudcerts"
 )
+
+// maxRequestBytes caps the size of any incoming request body. A MUD file
+// plus the surrounding ProductInfo JSON should comfortably fit; anything
+// larger is treated as abuse.
+const maxRequestBytes = 150 * 1024 // 150 KiB
+
+// limitBody installs an http.MaxBytesReader on every incoming request so
+// that BindJSON (and any other body reader) cannot exhaust memory.
+func limitBody(max int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, max)
+		c.Next()
+	}
+}
+
+// isBodyTooLarge reports whether err originated from http.MaxBytesReader.
+// JSON binders may wrap or stringify the underlying error, so we accept
+// either the typed error or the canonical message.
+func isBodyTooLarge(err error) bool {
+	if err == nil {
+		return false
+	}
+	var mbErr *http.MaxBytesError
+	if errors.As(err, &mbErr) {
+		return true
+	}
+	return strings.Contains(err.Error(), "request body too large")
+}
 
 var READMEsrc string = `
 
@@ -94,7 +124,11 @@ func httpError(c *gin.Context, status int, msg string, err error) {
 func postMUD(c *gin.Context) {
 	var pinfo ProductInfo
 
-	if err := c.BindJSON(&pinfo); err != nil {
+	if err := c.ShouldBindJSON(&pinfo); err != nil {
+		if isBodyTooLarge(err) {
+			httpError(c, http.StatusRequestEntityTooLarge, "request body too large", err)
+			return
+		}
 		httpError(c, http.StatusBadRequest, "invalid JSON body", err)
 		return
 	}
@@ -225,6 +259,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 	router.SetTrustedProxies(nil)
+	router.Use(limitBody(maxRequestBytes))
 	router.POST("/mudzip", postMUD)
 	router.Run(":8085")
 }
