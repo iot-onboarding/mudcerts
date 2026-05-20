@@ -21,14 +21,20 @@ package mudcerts
 import (
 	"bytes"
 	"encoding/pem"
+	"fmt"
 )
 
-// MakePEM returns a PEM string in a Buffer.
-func MakePEM(inBytes []byte, pemtype string) *bytes.Buffer {
+// MakePEM returns a PEM-encoded buffer for the given DER bytes and
+// block type. It returns an error if pem.Encode fails (which in
+// practice only happens on a programmer error such as a bad block
+// header), so callers should still check err.
+func MakePEM(inBytes []byte, pemtype string) (*bytes.Buffer, error) {
 	outPEM := new(bytes.Buffer)
-	pem.Encode(outPEM, &pem.Block{
+	if err := pem.Encode(outPEM, &pem.Block{
 		Type:  pemtype,
 		Bytes: inBytes,
-	})
-	return outPEM
+	}); err != nil {
+		return nil, fmt.Errorf("pem encode %s: %w", pemtype, err)
+	}
+	return outPEM, nil
 }

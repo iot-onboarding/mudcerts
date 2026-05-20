@@ -222,7 +222,11 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
-	capem := MakePEM(cabytes, "CERTIFICATE")
+	capem, err := MakePEM(cabytes, "CERTIFICATE")
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to encode CA PEM", err)
+		return
+	}
 	mudcert, mudcertPrivKey, err := MakeMUDcert(pinfo, cacert, caPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to create MUD certificate", err)
@@ -235,26 +239,46 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
-	mudcertpem := MakePEM(mudcert, "CERTIFICATE")
-	mudsignerpem := MakePEM(mudsigner, "CERTIFICATE")
+	mudcertpem, err := MakePEM(mudcert, "CERTIFICATE")
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to encode MUD cert PEM", err)
+		return
+	}
+	mudsignerpem, err := MakePEM(mudsigner, "CERTIFICATE")
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to encode MUD signer PEM", err)
+		return
+	}
 	caPrivBytes, err := x509.MarshalECPrivateKey(caPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to marshal CA private key", err)
 		return
 	}
-	caPrivkeyPEM := MakePEM(caPrivBytes, "PRIVATE KEY")
+	caPrivkeyPEM, err := MakePEM(caPrivBytes, "PRIVATE KEY")
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to encode CA key PEM", err)
+		return
+	}
 	mudPrivBytes, err := x509.MarshalECPrivateKey(mudcertPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to marshal MUD private key", err)
 		return
 	}
-	mudPrivKeyPEM := MakePEM(mudPrivBytes, "PRIVATE KEY")
+	mudPrivKeyPEM, err := MakePEM(mudPrivBytes, "PRIVATE KEY")
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to encode MUD key PEM", err)
+		return
+	}
 	mudsignerPrivBytes, err := x509.MarshalECPrivateKey(mudsignerPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to marshal MUD signer private key", err)
 		return
 	}
-	mudsignerPrivKeyPEM := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
+	mudsignerPrivKeyPEM, err := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
+	if err != nil {
+		httpError(c, http.StatusInternalServerError, "failed to encode MUD signer key PEM", err)
+		return
+	}
 
 	mudsigncert, err := x509.ParseCertificate(mudsigner)
 	if err != nil {

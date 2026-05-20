@@ -24,7 +24,7 @@ import (
 
 [func GenCA(ProductInfo) ([]byte, *ecdsa.PrivateKey, error)](#func-genca)\
 [func MakeMUDcert(ProductInfo, *x509.Certificate, *ecdsa.PrivateKey) ([]byte,*ecdsa.PrivateKey,error)](#func-makemudcert)\
-[func MakePEM([]byte, string) *bytes.Buffer](#func-makepem)\
+[func MakePEM([]byte, string) (*bytes.Buffer, error)](#func-makepem)\
 [func MakeSignerCert(p ProductInfo, ca *x509.Certificate, caPrivKey *ecdsa.PrivateKey) ([]byte, *ecdsa.PrivateKey, error)](#func-makesignercert)\
 [func SignMudFile(mudfile string, signerCert *x509.Certificate,
         certkey *ecdsa.PrivateKey) ([]byte, error)](#func-signmudfile) \
@@ -54,9 +54,9 @@ Returns a cert in the byte array, its associate private key, or an error.
 Returns a product cert with appropriate MUD extensions, an associated private key, or an error.  Requires the output from GenCA.
 
 ### func MakePEM
-> func MakePEM([]byte, string) *bytes.Buffer
+> func MakePEM([]byte, string) (*bytes.Buffer, error)
 
-Generates a PEM file with the header passed as a second argument.
+Generates a PEM file with the header passed as a second argument. Returns an error if PEM encoding fails.
 
 ### func MakeSignerCert
 > MakeSignerCert(p ProductInfo, ca *x509.Certificate, caPrivKey *ecdsa.PrivateKey) ([]byte, *ecdsa.PrivateKey, error)

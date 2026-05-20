@@ -92,9 +92,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err != nil {
-		log.Fatal(err)
-	}
 	if _, err := sd.VerifyDetached(mudfile, opts); err != nil {
 		log.Fatal(err)
 	}

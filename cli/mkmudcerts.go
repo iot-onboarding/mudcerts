@@ -78,7 +78,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	capem := MakePEM(cabytes, "CERTIFICATE")
+	capem, err := MakePEM(cabytes, "CERTIFICATE")
+	if err != nil {
+		log.Fatal(err)
+	}
 	mudcert, mudcertPrivKey, err := MakeMUDcert(pinfo, cacert, caPrivKey)
 	if err != nil {
 		log.Fatal(err)
@@ -88,14 +91,38 @@ func main() {
 		log.Fatal(err)
 	}
 
-	mudcertpem := MakePEM(mudcert, "CERTIFICATE")
-	caPrivBytes, _ := x509.MarshalECPrivateKey(caPrivKey)
-	caPrivkeyPEM := MakePEM(caPrivBytes, "PRIVATE KEY")
-	mudPrivBytes, _ := x509.MarshalECPrivateKey(mudcertPrivKey)
-	mudPrivKeyPEM := MakePEM(mudPrivBytes, "PRIVATE KEY")
-	mudsignerPEM := MakePEM(mudsigner, "CERTIFICATE")
-	mudsignerPrivBytes, _ := x509.MarshalECPrivateKey(mudsignerPrivKey)
-	mudsignerPrivKeyPEM := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
+	mudcertpem, err := MakePEM(mudcert, "CERTIFICATE")
+	if err != nil {
+		log.Fatal(err)
+	}
+	caPrivBytes, err := x509.MarshalECPrivateKey(caPrivKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	caPrivkeyPEM, err := MakePEM(caPrivBytes, "PRIVATE KEY")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mudPrivBytes, err := x509.MarshalECPrivateKey(mudcertPrivKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	mudPrivKeyPEM, err := MakePEM(mudPrivBytes, "PRIVATE KEY")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mudsignerPEM, err := MakePEM(mudsigner, "CERTIFICATE")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mudsignerPrivBytes, err := x509.MarshalECPrivateKey(mudsignerPrivKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	mudsignerPrivKeyPEM, err := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	fmt.Println(capem)
 	fmt.Println(caPrivkeyPEM)
