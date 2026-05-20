@@ -14,85 +14,131 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/*
+signmudfile takes as input a key, a signer, and one or more files,
+and generates a CMS signature, by appending .p7s to the file. The
+trailing extension is dropped.
+
+Usage:
+
+	signmudfile [flags] [path ...]
+
+	-cert string
+	      Name of file containing signing cert (default "signer.pem")
+	-key string
+	      Signer key (default "signer.key")
+*/
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
-	. "github.com/iot-onboarding/mudcerts"
 	"os"
 	"regexp"
+
+	. "github.com/iot-onboarding/mudcerts"
 )
 
-/*
- signmudfile takes as input a key, a signer, ad one or more files, and
- generates a cms signature, by appending .p7s to the file.  Other file
- extensions are dropped.
+// outExt strips the final extension and replaces it with .p7s.
+var outExt = regexp.MustCompile(`\.[^./\\]*$`)
 
- Usage:
+// loadCert reads a PEM file and returns the first CERTIFICATE block,
+// parsed. It errors if the file is missing, contains no PEM block, the
+// first block is not a CERTIFICATE, or the certificate fails to parse.
+func loadCert(path string) (*x509.Certificate, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read cert %s: %w", path, err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block in %s", path)
+	}
+	if block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("expected CERTIFICATE PEM block in %s, got %q", path, block.Type)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse certificate %s: %w", path, err)
+	}
+	return cert, nil
+}
 
-  signmudfile [flags] [path ...]
-  
-  -cert string
-        Name of file containing signing cert (default "signer.pem")
-  -key string
-        Signer key (default "signer.key")
+// loadECKey reads a PEM file and returns the first EC PRIVATE KEY block,
+// parsed. Unlike the previous implementation, the parse error is
+// captured directly and surfaced; a corrupt key file no longer yields a
+// nil key that later panics inside SignMudFile (CWE-252 / CWE-476).
+func loadECKey(path string) (*ecdsa.PrivateKey, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read key %s: %w", path, err)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM block in %s", path)
+	}
+	if block.Type != "EC PRIVATE KEY" && block.Type != "PRIVATE KEY" {
+		return nil, fmt.Errorf("expected EC PRIVATE KEY PEM block in %s, got %q", path, block.Type)
+	}
+	key, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse EC private key %s: %w", path, err)
+	}
+	return key, nil
+}
 
-*/
+// signFile signs a single mudfile and writes the detached CMS
+// signature to a sibling file with the input extension replaced by .p7s.
+func signFile(in string, cert *x509.Certificate, key *ecdsa.PrivateKey) error {
+	mudfile, err := os.ReadFile(in)
+	if err != nil {
+		return fmt.Errorf("read mud file %s: %w", in, err)
+	}
+	out := outExt.ReplaceAllLiteralString(in, "") + ".p7s"
+	der, err := SignMudFile(string(mudfile), cert, key)
+	if err != nil {
+		return fmt.Errorf("sign %s: %w", in, err)
+	}
+	if err := os.WriteFile(out, der, 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", out, err)
+	}
+	return nil
+}
+
+// signAll loads the signer credentials and signs every file in paths.
+// It is split out from main so tests can exercise the full flow without
+// spawning a process.
+func signAll(certPath, keyPath string, paths []string) error {
+	if len(paths) == 0 {
+		return errors.New("no files to sign")
+	}
+	cert, err := loadCert(certPath)
+	if err != nil {
+		return err
+	}
+	key, err := loadECKey(keyPath)
+	if err != nil {
+		return err
+	}
+	for _, fn := range paths {
+		if err := signFile(fn, cert, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func main() {
 	certfile := flag.String("cert", "signer.pem",
 		"Name of file containing signing cert")
 	keyfile := flag.String("key", "signer.key", "Signer key")
 	flag.Parse()
-	// read in cert and key
-	pemfile, err := os.ReadFile(*certfile)
-	if err != nil {
+	if err := signAll(*certfile, *keyfile, flag.Args()); err != nil {
 		log.Fatal(err)
-	}
-	block, _ := pem.Decode(pemfile)
-	if block == nil {
-		log.Fatal("No certificate found")
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	pemfile, err = os.ReadFile(*keyfile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	block, _ = pem.Decode(pemfile)
-	if block == nil {
-		log.Fatal("No key found")
-	}
-
-	key, _ := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if flag.NArg() == 0 {
-		log.Fatal("No files to sign.")
-	}
-
-	re := regexp.MustCompile("\\..*$")
-	for _, fn := range flag.Args() {
-		var newfn = re.ReplaceAllLiteralString(fn, "") + ".p7s"
-		mudfile, err := os.ReadFile(fn)
-		if err != nil {
-			log.Fatal(err)
-		}
-		der, err := SignMudFile(string(mudfile), cert, key)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = os.WriteFile(newfn, der, 0600)
-		if err != nil {
-			log.Fatal(err)
-		}
 	}
 }
