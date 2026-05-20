@@ -36,12 +36,12 @@ func MakeSignerCert(p ProductInfo,
 
 	serNum, err := certSerial()
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate certificate serial: %w", err)
 	}
 
 	ski, err := certSKI()
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate subject key identifier: %w", err)
 	}
 
 	cert := &x509.Certificate{
@@ -61,12 +61,12 @@ func MakeSignerCert(p ProductInfo,
 
 	certPrivKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate signer key: %w", err)
 	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("create signer certificate: %w", err)
 	}
 	return certBytes, certPrivKey, nil
 }

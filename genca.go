@@ -60,11 +60,11 @@ func GenCA(p ProductInfo) ([]byte, *ecdsa.PrivateKey, error) {
 
 	caPrivKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate CA key: %w", err)
 	}
 	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("create CA certificate: %w", err)
 	}
 
 	return caBytes, caPrivKey, nil
