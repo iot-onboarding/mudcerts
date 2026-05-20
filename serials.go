@@ -28,7 +28,7 @@ import (
 func certSerial() (*big.Int, error) {
 	serNum, err := rand.Int(rand.Reader, big.NewInt(9223372036854))
 	if err != nil {
-		return big.NewInt(0), fmt.Errorf("%s", err)
+		return big.NewInt(0), fmt.Errorf("read random for serial: %w", err)
 	}
 	return serNum, nil
 }
@@ -37,7 +37,7 @@ func certSerial() (*big.Int, error) {
 func certSKI() ([]byte, error) {
 	ski, err := rand.Int(rand.Reader, big.NewInt(9223372036854775807))
 	if err != nil {
-		return nil, fmt.Errorf("%s", err)
+		return nil, fmt.Errorf("read random for SKI: %w", err)
 	}
 	return ski.Bytes(), nil
 }

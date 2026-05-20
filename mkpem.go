@@ -21,14 +21,20 @@ package mudcerts
 import (
 	"bytes"
 	"encoding/pem"
+	"fmt"
 )
 
-// MakePEM returns a PEM string in a Buffer.
+// MakePEM returns a PEM string in a Buffer. pem.Encode can only fail
+// if the underlying io.Writer returns an error; since bytes.Buffer.Write
+// never does, a non-nil error here would indicate a programmer error
+// (e.g. a malformed pem.Block header) and is treated as unrecoverable.
 func MakePEM(inBytes []byte, pemtype string) *bytes.Buffer {
 	outPEM := new(bytes.Buffer)
-	pem.Encode(outPEM, &pem.Block{
+	if err := pem.Encode(outPEM, &pem.Block{
 		Type:  pemtype,
 		Bytes: inBytes,
-	})
+	}); err != nil {
+		panic(fmt.Errorf("mudcerts: pem.Encode %s: %w", pemtype, err))
+	}
 	return outPEM
 }

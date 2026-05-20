@@ -32,7 +32,7 @@ func SignMudFile(mudfile string, signerCert *x509.Certificate,
 	certChain := []*x509.Certificate{signerCert}
 	signature, err := cms.SignDetached([]byte(mudfile), certChain, certkey)
 	if err != nil {
-		return nil, fmt.Errorf("%s", err)
+		return nil, fmt.Errorf("sign MUD file: %w", err)
 	}
 	return signature, nil
 }

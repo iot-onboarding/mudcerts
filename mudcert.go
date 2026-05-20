@@ -38,7 +38,7 @@ func MakeMUDcert(p ProductInfo, ca *x509.Certificate,
 
 	urlentry, err := asn1.Marshal(p.MudUrl)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("marshal MUD URL extension: %w", err)
 	}
 	mudurlExtension := pkix.Extension{
 		Id:    asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 1, 25},
@@ -54,7 +54,7 @@ func MakeMUDcert(p ProductInfo, ca *x509.Certificate,
 	mudSignerSeq, err := asn1.Marshal(signerName.ToRDNSequence())
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("marshal MUD signer extension: %w", err)
 	}
 
 	mudSignerExt := pkix.Extension{
@@ -63,11 +63,11 @@ func MakeMUDcert(p ProductInfo, ca *x509.Certificate,
 	}
 	ski, err := certSKI()
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate subject key identifier: %w", err)
 	}
 	serNum, err := certSerial()
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate certificate serial: %w", err)
 	}
 
 	cert := &x509.Certificate{
@@ -88,12 +88,12 @@ func MakeMUDcert(p ProductInfo, ca *x509.Certificate,
 
 	certPrivKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("generate MUD key: %w", err)
 	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, cert, ca, &certPrivKey.PublicKey, caPrivKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s", err)
+		return nil, nil, fmt.Errorf("create MUD certificate: %w", err)
 	}
 	return certBytes, certPrivKey, nil
 }
