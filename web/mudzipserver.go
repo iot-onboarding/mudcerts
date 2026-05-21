@@ -159,10 +159,12 @@ YOURDEVICE.p7s    --> A detached CMS signature of your MUD file
                       signed with mudsigner.pem.
 
 You can verifiy the signature of the MUD file with the following openssl
-command:
+command. The -binary flag is required: the MUD file is signed verbatim
+(as binary CMS data), and without -binary openssl performs SMIME-style
+CRLF canonicalization on the content and the digest no longer matches.
 
  % openssl cms -verify -in YOURDEVICE.p7s -inform DER -content YOURDEVICE.json \
-    -CAfile ca.pem -purpose any -out /dev/null
+    -CAfile ca.pem -purpose any -binary -out /dev/null
 
 The source code used to build the zip file can be found at the following location:
 https://github.com/iot-onboarding/mudcerts
