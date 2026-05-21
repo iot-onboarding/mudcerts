@@ -15,8 +15,29 @@
 # SPDX-License-Identifier: Apache-2.0
 
 services:
+  # Go service: POST /mudzip on :8085 generates the cert bundle + signed MUD zip.
+  # Also publishes Apache from the mudmaker container (see network_mode below),
+  # so :8080 is mapped here.
   mudcerts:
+    build: .
     image: "mudcerts:latest"
     restart: always
-    ports: 
-      - 127.0.0.1:8085:8085
+    ports:
+      - "127.0.0.1:8085:8085"
+      - "127.0.0.1:8088:8080"
+
+  # PHP/Apache frontend. mudmaker's download.php hard-codes
+  # http://localhost:8085/mudzip, so this container shares the network
+  # namespace of the mudcerts service. That makes "localhost:8085"
+  # resolve to the Go service without patching upstream sources.
+  # Build context is ./mudmaker, which the project's README expects you
+  # to populate with:
+  #   git clone --recursive https://github.com/iot-onboarding/mudmaker.git
+  #   (cd mudmaker && ./create_symlinks.sh)
+  mudmaker:
+    build: ./mudmaker
+    image: "mudmaker:latest"
+    restart: always
+    network_mode: "service:mudcerts"
+    depends_on:
+      - mudcerts

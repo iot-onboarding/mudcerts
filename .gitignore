@@ -22,3 +22,6 @@ go.work
 
 # Backup files
 *~
+
+# Locally cloned mudmaker (see docker-compose.yml)
+/mudmaker/

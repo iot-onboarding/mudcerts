@@ -127,6 +127,26 @@ Input: JSON version of ProductInfo
 
 Returns: a zip file containing all the certs and a signed MUD file.
 
+#### Running with the mudmaker UI
+
+`docker-compose.yml` ships a two-service stack that pairs `mudzipserver`
+with the [mudmaker](https://github.com/iot-onboarding/mudmaker) PHP/Apache
+front-end. Because `mudmaker`'s `download.php` hard-codes
+`http://localhost:8085/mudzip`, the `mudmaker` service is configured with
+`network_mode: "service:mudcerts"` so it shares the `mudcerts` network
+namespace -- no upstream patching required.
+
+To bring it up, clone mudmaker into this repo and build:
+
+```sh
+git clone --recursive https://github.com/iot-onboarding/mudmaker.git
+(cd mudmaker && ./create_symlinks.sh)
+docker compose up -d --build
+```
+
+The UI is then reachable at `http://127.0.0.1:8088/` and the Go service
+at `http://127.0.0.1:8085/mudzip`.
+
 ## TODO
 
 * Currently only ECDSA certs with P256 are supported.
