@@ -37,7 +37,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"net/mail"
@@ -77,11 +76,24 @@ func isBodyTooLarge(err error) bool {
 	return strings.Contains(err.Error(), "request body too large")
 }
 
-// modelRe restricts pinfo.Model to a path- and header-safe character set.
-// Model is concatenated into zip entry names and the Content-Disposition
-// filename, so any control characters, quotes, slashes, or whitespace
-// would enable injection (CWE-22 / CWE-93).
-var modelRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
+// modelUnsafe matches any rune that is NOT safe to embed in a zip entry
+// name or a Content-Disposition filename. The Model field itself is
+// free-form identity text (it is also placed in X.509 CN), but anywhere
+// it ends up in a filename it must first be passed through safeModel,
+// which replaces each unsafe rune with '_' (CWE-22 / CWE-93).
+var modelUnsafe = regexp.MustCompile(`[^A-Za-z0-9._-]`)
+
+// safeModel returns a filename-safe rendering of the Model field.
+// Callers must have already validated that p.Model is non-empty,
+// <= 64 runes, and contains only printable, non-control characters
+// (see validateProductInfo).
+func safeModel(m string) string {
+	s := modelUnsafe.ReplaceAllString(m, "_")
+	if s == "" {
+		return "device"
+	}
+	return s
+}
 
 // printableField requires 1..max printable, non-control characters and
 // forbids CR/LF entirely. Used for free-form text fields that end up
@@ -102,8 +114,8 @@ func printableField(s string, max int) bool {
 // before any crypto or zip work is performed. Returning a descriptive
 // error lets the caller surface a 400 to the client.
 func validateProductInfo(p ProductInfo) error {
-	if !modelRe.MatchString(p.Model) {
-		return fmt.Errorf("Model must match %s", modelRe)
+	if !printableField(p.Model, 64) {
+		return errors.New("Model must be 1-64 printable characters")
 	}
 	if !printableField(p.Manufacturer, 64) {
 		return errors.New("Manufacturer must be 1-64 printable characters")
@@ -267,8 +279,13 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
+	// safeName is used for everything that ends up in a filename, header,
+	// or README placeholder. pinfo.Model itself is identity text and may
+	// contain spaces or other characters that would be unsafe to embed.
+	safeName := safeModel(pinfo.Model)
+
 	re := regexp.MustCompile(`YOURDEVICE`)
-	READMEtxt := re.ReplaceAll([]byte(READMEsrc), []byte(pinfo.Model))
+	READMEtxt := re.ReplaceAll([]byte(READMEsrc), []byte(safeName))
 
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
@@ -282,7 +299,7 @@ func postMUD(c *gin.Context) {
 		{"mudsigner-key.pem", mudsignerPrivKeyPEM.String()},
 		{"mudcert.pem", mudcertpem.String()},
 		{"mudkey.pem", mudPrivKeyPEM.String()},
-		{pinfo.Model + ".json", string(mudjson)},
+		{safeName + ".json", string(mudjson)},
 	}
 
 	for _, file := range files {
@@ -297,7 +314,7 @@ func postMUD(c *gin.Context) {
 			return
 		}
 	}
-	f, err := w.Create(pinfo.Model + ".p7s")
+	f, err := w.Create(safeName + ".p7s")
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to create signature zip entry", err)
 		return
@@ -312,7 +329,7 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
-	c.Header("Content-Disposition", "attachment; filename=\""+pinfo.Model+".zip"+"\"")
+	c.Header("Content-Disposition", "attachment; filename=\""+safeName+".zip"+"\"")
 
 	c.Data(http.StatusOK, "application/zip", buf.Bytes())
 }

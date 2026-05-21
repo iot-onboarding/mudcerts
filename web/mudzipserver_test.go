@@ -16,6 +16,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -190,10 +191,7 @@ func TestValidateProductInfoRejects(t *testing.T) {
 		mut  func(p *ProductInfo)
 	}{
 		{"empty Model", func(p *ProductInfo) { p.Model = "" }},
-		{"Model with slash", func(p *ProductInfo) { p.Model = "../etc/passwd" }},
-		{"Model with quote", func(p *ProductInfo) { p.Model = `bad"name` }},
 		{"Model with CRLF", func(p *ProductInfo) { p.Model = "x\r\ny" }},
-		{"Model with space", func(p *ProductInfo) { p.Model = "Test Device" }},
 		{"Model too long", func(p *ProductInfo) { p.Model = strings.Repeat("a", 65) }},
 		{"empty Manufacturer", func(p *ProductInfo) { p.Manufacturer = "" }},
 		{"Manufacturer with control char", func(p *ProductInfo) { p.Manufacturer = "ACME\x01" }},
@@ -225,5 +223,49 @@ func TestValidateProductInfoAccepts(t *testing.T) {
 	w := postPInfo(t, validPInfo())
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %q; want 200", w.Code, w.Body.String())
+	}
+}
+
+// TestModelSanitizedForFilenames verifies that a Model containing
+// characters that would be dangerous in a filename or HTTP header
+// (slash, quote, space) is accepted but never appears verbatim in
+// either the zip entry names or the Content-Disposition header.
+// This guards against the CWE-22 / CWE-93 cases originally enforced by
+// the modelRe regex: those characters are now sanitized rather than
+// rejected, so the Model field can carry the free-form systeminfo text
+// that the mudmaker UI produces.
+func TestModelSanitizedForFilenames(t *testing.T) {
+	p := validPInfo()
+	p.Model = `../etc/pa"ss wd`
+
+	w := postPInfo(t, p)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q; want 200", w.Code, w.Body.String())
+	}
+
+	cd := w.Header().Get("Content-Disposition")
+	_, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		t.Fatalf("ParseMediaType(%q): %v", cd, err)
+	}
+	fname := params["filename"]
+	if fname == "" {
+		t.Fatalf("Content-Disposition %q has no filename", cd)
+	}
+	if strings.ContainsAny(fname, `/\"`+" ") {
+		t.Errorf("filename = %q contains unsafe character", fname)
+	}
+	if !strings.Contains(fname, "_") {
+		t.Errorf("filename = %q expected to contain '_' from sanitization", fname)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	if err != nil {
+		t.Fatalf("zip.NewReader: %v", err)
+	}
+	for _, f := range zr.File {
+		if strings.ContainsAny(f.Name, `/\"`+" ") {
+			t.Errorf("zip entry name %q contains unsafe character", f.Name)
+		}
 	}
 }
