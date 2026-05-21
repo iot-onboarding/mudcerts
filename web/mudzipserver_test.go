@@ -132,6 +132,49 @@ func TestPostMUDProducesZip(t *testing.T) {
 	}
 }
 
+// TestREADMEOpensslVerifyHasBinary guards against a regression where the
+// openssl verification snippet in README.txt is missing the -binary flag.
+// Without -binary, openssl applies SMIME-style CRLF canonicalization to
+// the content and the digest no longer matches the messageDigest signed
+// attribute that smimesign/ietf-cms produced over the verbatim bytes,
+// so end users following the README see a spurious verification failure.
+func TestREADMEOpensslVerifyHasBinary(t *testing.T) {
+	w := postPInfo(t, validPInfo())
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q; want 200", w.Code, w.Body.String())
+	}
+	zr, err := zip.NewReader(bytes.NewReader(w.Body.Bytes()), int64(w.Body.Len()))
+	if err != nil {
+		t.Fatalf("zip.NewReader: %v", err)
+	}
+	var readme []byte
+	for _, f := range zr.File {
+		if f.Name != "README.txt" {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open README.txt: %v", err)
+		}
+		readme, err = io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("read README.txt: %v", err)
+		}
+		break
+	}
+	if len(readme) == 0 {
+		t.Fatal("README.txt entry not found in zip")
+	}
+	// Find the openssl cms -verify command and confirm it carries -binary.
+	if !bytes.Contains(readme, []byte("openssl cms -verify")) {
+		t.Fatal("README.txt missing 'openssl cms -verify' snippet")
+	}
+	if !bytes.Contains(readme, []byte("-binary")) {
+		t.Errorf("README.txt openssl example missing -binary flag; got:\n%s", readme)
+	}
+}
+
 // TestPostMUDBodyTooLarge verifies that requests exceeding the body-size
 // limit are rejected with 413 and that the handler does not perform any
 // expensive crypto work.
