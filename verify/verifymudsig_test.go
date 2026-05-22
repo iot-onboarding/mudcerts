@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/iot-onboarding/mudcerts"
+	mudcerts "github.com/iot-onboarding/mudcerts"
 )
 
 // fixtures holds an in-memory set of generated artifacts plus the
@@ -44,7 +44,7 @@ type fixtures struct {
 func newFixtures(t *testing.T) *fixtures {
 	t.Helper()
 	dir := t.TempDir()
-	pinfo := ProductInfo{
+	pinfo := mudcerts.ProductInfo{
 		Manufacturer: "Test Co",
 		CountryCode:  "US",
 		Model:        "TestModel",
@@ -53,7 +53,7 @@ func newFixtures(t *testing.T) *fixtures {
 		SerialNumber: "SN-1",
 	}
 
-	caBytes, caKey, err := GenCA(pinfo)
+	caBytes, caKey, err := mudcerts.GenCA(pinfo)
 	if err != nil {
 		t.Fatalf("GenCA: %v", err)
 	}
@@ -62,7 +62,7 @@ func newFixtures(t *testing.T) *fixtures {
 		t.Fatalf("ParseCertificate(ca): %v", err)
 	}
 
-	signerBytes, signerKey, err := MakeSignerCert(pinfo, caCert, caKey)
+	signerBytes, signerKey, err := mudcerts.MakeSignerCert(pinfo, caCert, caKey)
 	if err != nil {
 		t.Fatalf("MakeSignerCert: %v", err)
 	}
@@ -72,7 +72,7 @@ func newFixtures(t *testing.T) *fixtures {
 	}
 
 	mud := []byte(`{"ietf-mud:mud":{"mud-version":1,"mud-url":"https://example.com/test.json"}}`)
-	sig, err := SignMudFile(string(mud), signerCert, signerKey)
+	sig, err := mudcerts.SignMudFile(string(mud), signerCert, signerKey)
 	if err != nil {
 		t.Fatalf("SignMudFile: %v", err)
 	}
@@ -85,8 +85,8 @@ func newFixtures(t *testing.T) *fixtures {
 		return p
 	}
 
-	caPath := writeFile("ca.pem", MakePEM(caBytes, "CERTIFICATE").Bytes())
-	signerPath := writeFile("signer.pem", MakePEM(signerBytes, "CERTIFICATE").Bytes())
+	caPath := writeFile("ca.pem", mudcerts.MakePEM(caBytes, "CERTIFICATE").Bytes())
+	signerPath := writeFile("signer.pem", mudcerts.MakePEM(signerBytes, "CERTIFICATE").Bytes())
 	sigPath := writeFile("mudfile.p7s", sig)
 	mudPath := writeFile("mud.json", mud)
 

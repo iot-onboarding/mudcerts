@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	cms "github.com/github/smimesign/ietf-cms"
-	. "github.com/iot-onboarding/mudcerts"
+	mudcerts "github.com/iot-onboarding/mudcerts"
 )
 
 // signFixture generates a CA + signer cert and writes signer.pem +
@@ -33,14 +33,14 @@ import (
 // CA cert (for verifying signatures produced by signAll).
 func signFixture(t *testing.T, dir string) (certPath, keyPath string, caCert *x509.Certificate) {
 	t.Helper()
-	p := ProductInfo{
+	p := mudcerts.ProductInfo{
 		Manufacturer: "ACME",
 		CountryCode:  "US",
 		Model:        "Device1",
 		MudUrl:       "https://example.com/mud/Device1",
 		EmailAddress: "signer@example.com",
 	}
-	caBytes, caKey, err := GenCA(p)
+	caBytes, caKey, err := mudcerts.GenCA(p)
 	if err != nil {
 		t.Fatalf("GenCA: %v", err)
 	}
@@ -48,16 +48,16 @@ func signFixture(t *testing.T, dir string) (certPath, keyPath string, caCert *x5
 	if err != nil {
 		t.Fatalf("ParseCertificate CA: %v", err)
 	}
-	signerBytes, signerKey, err := MakeSignerCert(p, caCert, caKey)
+	signerBytes, signerKey, err := mudcerts.MakeSignerCert(p, caCert, caKey)
 	if err != nil {
 		t.Fatalf("MakeSignerCert: %v", err)
 	}
-	signerPEM := MakePEM(signerBytes, "CERTIFICATE")
+	signerPEM := mudcerts.MakePEM(signerBytes, "CERTIFICATE")
 	keyDER, err := x509.MarshalECPrivateKey(signerKey)
 	if err != nil {
 		t.Fatalf("MarshalECPrivateKey: %v", err)
 	}
-	keyPEM := MakePEM(keyDER, "EC PRIVATE KEY")
+	keyPEM := mudcerts.MakePEM(keyDER, "EC PRIVATE KEY")
 
 	certPath = filepath.Join(dir, "signer.pem")
 	keyPath = filepath.Join(dir, "signer.key")

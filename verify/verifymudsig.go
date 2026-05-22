@@ -60,7 +60,10 @@ func loadPEMCerts(path string) ([]*x509.Certificate, error) {
 	if path == "" {
 		return nil, errors.New("empty path")
 	}
-	data, err := os.ReadFile(path)
+	// G304: path is supplied by the operator via a CLI flag (-ca / -int);
+	// loading the file they pointed at is the documented purpose of this
+	// tool.
+	data, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -131,11 +134,11 @@ func verify(caPath, intPath, sigPath, mudPath string, now time.Time) error {
 		return err
 	}
 
-	sig, err := os.ReadFile(sigPath)
+	sig, err := os.ReadFile(sigPath) //nolint:gosec // CLI -sig flag
 	if err != nil {
 		return fmt.Errorf("read sig %s: %w", sigPath, err)
 	}
-	mudfile, err := os.ReadFile(mudPath)
+	mudfile, err := os.ReadFile(mudPath) //nolint:gosec // CLI positional arg
 	if err != nil {
 		return fmt.Errorf("read mud file %s: %w", mudPath, err)
 	}

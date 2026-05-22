@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	. "github.com/iot-onboarding/mudcerts"
+	mudcerts "github.com/iot-onboarding/mudcerts"
 )
 
 // newTestRouter builds a gin router wired up the same way main() does,
@@ -44,7 +44,7 @@ func newTestRouter() *gin.Engine {
 func TestPostMUDProducesZip(t *testing.T) {
 	mudjson := `{"ietf-mud:mud":{"mud-version":1,"mud-url":"https://example.com/test.json"}}`
 
-	pinfo := ProductInfo{
+	pinfo := mudcerts.ProductInfo{
 		Manufacturer: "ACME Supplies",
 		Model:        "TestDevice",
 		CountryCode:  "US",
@@ -106,7 +106,7 @@ func TestPostMUDProducesZip(t *testing.T) {
 			continue
 		}
 		data, err := io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil {
 			t.Errorf("read %q: %v", name, err)
 			continue
@@ -125,7 +125,7 @@ func TestPostMUDProducesZip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open mud json: %v", err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	data, err := io.ReadAll(rc)
 	if err != nil {
 		t.Fatalf("read mud json: %v", err)
@@ -160,7 +160,7 @@ func TestREADMEOpensslVerifyHasBinary(t *testing.T) {
 			t.Fatalf("open README.txt: %v", err)
 		}
 		readme, err = io.ReadAll(rc)
-		rc.Close()
+		_ = rc.Close()
 		if err != nil {
 			t.Fatalf("read README.txt: %v", err)
 		}
@@ -201,9 +201,9 @@ func TestPostMUDBodyTooLarge(t *testing.T) {
 
 // validPInfo returns a ProductInfo that passes validateProductInfo, so
 // individual tests can mutate one field to exercise a single rule.
-func validPInfo() ProductInfo {
+func validPInfo() mudcerts.ProductInfo {
 	mudjson := `{"ietf-mud:mud":{"mud-version":1,"mud-url":"https://example.com/test.json"}}`
-	return ProductInfo{
+	return mudcerts.ProductInfo{
 		Manufacturer: "ACME Supplies",
 		Model:        "TestDevice",
 		CountryCode:  "US",
@@ -214,7 +214,7 @@ func validPInfo() ProductInfo {
 	}
 }
 
-func postPInfo(t *testing.T, p ProductInfo) *httptest.ResponseRecorder {
+func postPInfo(t *testing.T, p mudcerts.ProductInfo) *httptest.ResponseRecorder {
 	t.Helper()
 	body, err := json.Marshal(p)
 	if err != nil {
@@ -233,21 +233,21 @@ func postPInfo(t *testing.T, p ProductInfo) *httptest.ResponseRecorder {
 func TestValidateProductInfoRejects(t *testing.T) {
 	cases := []struct {
 		name string
-		mut  func(p *ProductInfo)
+		mut  func(p *mudcerts.ProductInfo)
 	}{
-		{"empty Model", func(p *ProductInfo) { p.Model = "" }},
-		{"Model with CRLF", func(p *ProductInfo) { p.Model = "x\r\ny" }},
-		{"Model too long", func(p *ProductInfo) { p.Model = strings.Repeat("a", 65) }},
-		{"empty Manufacturer", func(p *ProductInfo) { p.Manufacturer = "" }},
-		{"Manufacturer with control char", func(p *ProductInfo) { p.Manufacturer = "ACME\x01" }},
-		{"lowercase CountryCode", func(p *ProductInfo) { p.CountryCode = "us" }},
-		{"3-char CountryCode", func(p *ProductInfo) { p.CountryCode = "USA" }},
-		{"empty CountryCode", func(p *ProductInfo) { p.CountryCode = "" }},
-		{"http MudUrl", func(p *ProductInfo) { p.MudUrl = "http://example.com/x.json" }},
-		{"non-URL MudUrl", func(p *ProductInfo) { p.MudUrl = "not a url" }},
-		{"empty MudUrl", func(p *ProductInfo) { p.MudUrl = "" }},
-		{"bad EmailAddress", func(p *ProductInfo) { p.EmailAddress = "not-an-email" }},
-		{"empty Mudfile", func(p *ProductInfo) { p.Mudfile = "" }},
+		{"empty Model", func(p *mudcerts.ProductInfo) { p.Model = "" }},
+		{"Model with CRLF", func(p *mudcerts.ProductInfo) { p.Model = "x\r\ny" }},
+		{"Model too long", func(p *mudcerts.ProductInfo) { p.Model = strings.Repeat("a", 65) }},
+		{"empty Manufacturer", func(p *mudcerts.ProductInfo) { p.Manufacturer = "" }},
+		{"Manufacturer with control char", func(p *mudcerts.ProductInfo) { p.Manufacturer = "ACME\x01" }},
+		{"lowercase CountryCode", func(p *mudcerts.ProductInfo) { p.CountryCode = "us" }},
+		{"3-char CountryCode", func(p *mudcerts.ProductInfo) { p.CountryCode = "USA" }},
+		{"empty CountryCode", func(p *mudcerts.ProductInfo) { p.CountryCode = "" }},
+		{"http MudUrl", func(p *mudcerts.ProductInfo) { p.MudUrl = "http://example.com/x.json" }},
+		{"non-URL MudUrl", func(p *mudcerts.ProductInfo) { p.MudUrl = "not a url" }},
+		{"empty MudUrl", func(p *mudcerts.ProductInfo) { p.MudUrl = "" }},
+		{"bad EmailAddress", func(p *mudcerts.ProductInfo) { p.EmailAddress = "not-an-email" }},
+		{"empty Mudfile", func(p *mudcerts.ProductInfo) { p.Mudfile = "" }},
 	}
 
 	for _, tc := range cases {
