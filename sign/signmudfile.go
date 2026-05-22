@@ -51,7 +51,7 @@ var outExt = regexp.MustCompile(`\.[^./\\]*$`)
 // parsed. It errors if the file is missing, contains no PEM block, the
 // first block is not a CERTIFICATE, or the certificate fails to parse.
 func loadCert(path string) (*x509.Certificate, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // CLI tool: path comes from -cert flag
 	if err != nil {
 		return nil, fmt.Errorf("read cert %s: %w", path, err)
 	}
@@ -74,7 +74,7 @@ func loadCert(path string) (*x509.Certificate, error) {
 // captured directly and surfaced; a corrupt key file no longer yields a
 // nil key that later panics inside SignMudFile (CWE-252 / CWE-476).
 func loadECKey(path string) (*ecdsa.PrivateKey, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // CLI tool: path comes from -key flag
 	if err != nil {
 		return nil, fmt.Errorf("read key %s: %w", path, err)
 	}
@@ -95,7 +95,7 @@ func loadECKey(path string) (*ecdsa.PrivateKey, error) {
 // signFile signs a single mudfile and writes the detached CMS
 // signature to a sibling file with the input extension replaced by .p7s.
 func signFile(in string, cert *x509.Certificate, key *ecdsa.PrivateKey) error {
-	mudfile, err := os.ReadFile(in)
+	mudfile, err := os.ReadFile(in) //nolint:gosec // CLI tool: in is a positional argument
 	if err != nil {
 		return fmt.Errorf("read mud file %s: %w", in, err)
 	}
