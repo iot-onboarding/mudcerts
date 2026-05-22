@@ -20,7 +20,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	. "github.com/iot-onboarding/mudcerts"
@@ -309,6 +311,79 @@ func TestModelSanitizedForFilenames(t *testing.T) {
 	for _, f := range zr.File {
 		if strings.ContainsAny(f.Name, `/\"`+" ") {
 			t.Errorf("zip entry name %q contains unsafe character", f.Name)
+		}
+	}
+}
+
+// TestConcurrencyLimiterReturns429 verifies that concurrencyLimiter
+// rejects excess concurrent requests with HTTP 429 + Retry-After once
+// its capacity is exhausted and the acquire timeout elapses. This
+// guards the /mudzip endpoint against CPU exhaustion via concurrent
+// CMS/ECDSA work (CWE-770, issue #23).
+func TestConcurrencyLimiterReturns429(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	// Capacity 1 + tiny timeout so we deterministically force a reject
+	// on the second concurrent request without slowing the test suite.
+	r.Use(concurrencyLimiter(1, 20*time.Millisecond))
+
+	// Block the slot until the test releases it, so the second request
+	// is forced to wait past the acquire timeout.
+	release := make(chan struct{})
+	r.GET("/slow", func(c *gin.Context) {
+		<-release
+		c.Status(http.StatusOK)
+	})
+
+	// Fire request #1 in the background; it holds the only slot.
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		req := httptest.NewRequest(http.MethodGet, "/slow", nil)
+		w := httptest.NewRecorder()
+		close(started)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Errorf("first request status = %d, want 200", w.Code)
+		}
+	}()
+	<-started
+	// Give the first request a moment to enter the limiter before
+	// issuing the second; otherwise both may race for the slot.
+	time.Sleep(5 * time.Millisecond)
+
+	req := httptest.NewRequest(http.MethodGet, "/slow", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request status = %d, want 429", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got == "" {
+		t.Errorf("Retry-After header missing on 429 response")
+	}
+
+	close(release)
+	wg.Wait()
+}
+
+// TestConcurrencyLimiterServesSequentialRequests confirms that after a
+// blocked request completes, the slot is released and subsequent
+// requests succeed normally (the semaphore is not leaked).
+func TestConcurrencyLimiterServesSequentialRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(concurrencyLimiter(1, 50*time.Millisecond))
+	r.GET("/ok", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("iteration %d: status = %d, want 200", i, w.Code)
 		}
 	}
 }
