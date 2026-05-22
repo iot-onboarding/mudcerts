@@ -187,7 +187,7 @@ func validateProductInfo(p mudcerts.ProductInfo) error {
 		}
 	}
 	if p.Mudfile == "" {
-		return errors.New("Mudfile is required")
+		return errors.New("mudfile is required")
 	}
 	return nil
 }
