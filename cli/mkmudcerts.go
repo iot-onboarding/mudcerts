@@ -15,6 +15,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 package main
+
 /*
 mkmudcerts takes as input product information and generates a set of
 certificates and keys.
@@ -43,8 +44,8 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	mudcerts "github.com/iot-onboarding/mudcerts"
 	"log"
-	. "github.com/iot-onboarding/mudcerts"
 )
 
 func main() {
@@ -54,12 +55,12 @@ func main() {
 	model := flag.String("mod", "Hornblower 2000", "Device Model")
 	mudurl := flag.String("mudurl", "https://...", "URL for MUDfile")
 	sernum := flag.String("ser", "SN12345", "A device Serial Number")
-	emailaddr := flag.String("email","user@mudsigner.example.com",
+	emailaddr := flag.String("email", "user@mudsigner.example.com",
 		"An email address as a SubjectAltName")
 
 	flag.Parse()
 
-	pinfo := ProductInfo{
+	pinfo := mudcerts.ProductInfo{
 		Manufacturer: *mfg,
 		CountryCode:  *mfgCC,
 		Model:        *model,
@@ -68,7 +69,7 @@ func main() {
 		EmailAddress: *emailaddr,
 	}
 
-	cabytes, caPrivKey, err := GenCA(pinfo)
+	cabytes, caPrivKey, err := mudcerts.GenCA(pinfo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -78,24 +79,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	capem := MakePEM(cabytes, "CERTIFICATE")
-	mudcert, mudcertPrivKey, err := MakeMUDcert(pinfo, cacert, caPrivKey)
+	capem := mudcerts.MakePEM(cabytes, "CERTIFICATE")
+	mudcert, mudcertPrivKey, err := mudcerts.MakeMUDcert(pinfo, cacert, caPrivKey)
 	if err != nil {
 		log.Fatal(err)
 	}
-	mudsigner, mudsignerPrivKey, err := MakeSignerCert(pinfo, cacert, caPrivKey)
+	mudsigner, mudsignerPrivKey, err := mudcerts.MakeSignerCert(pinfo, cacert, caPrivKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	mudcertpem := MakePEM(mudcert, "CERTIFICATE")
+	mudcertpem := mudcerts.MakePEM(mudcert, "CERTIFICATE")
 	caPrivBytes, _ := x509.MarshalECPrivateKey(caPrivKey)
-	caPrivkeyPEM := MakePEM(caPrivBytes, "PRIVATE KEY")
+	caPrivkeyPEM := mudcerts.MakePEM(caPrivBytes, "PRIVATE KEY")
 	mudPrivBytes, _ := x509.MarshalECPrivateKey(mudcertPrivKey)
-	mudPrivKeyPEM := MakePEM(mudPrivBytes, "PRIVATE KEY")
-	mudsignerPEM := MakePEM(mudsigner, "CERTIFICATE")
+	mudPrivKeyPEM := mudcerts.MakePEM(mudPrivBytes, "PRIVATE KEY")
+	mudsignerPEM := mudcerts.MakePEM(mudsigner, "CERTIFICATE")
 	mudsignerPrivBytes, _ := x509.MarshalECPrivateKey(mudsignerPrivKey)
-	mudsignerPrivKeyPEM := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
+	mudsignerPrivKeyPEM := mudcerts.MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
 
 	fmt.Println(capem)
 	fmt.Println(caPrivkeyPEM)

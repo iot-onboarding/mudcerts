@@ -41,7 +41,7 @@ import (
 	"os"
 	"regexp"
 
-	. "github.com/iot-onboarding/mudcerts"
+	mudcerts "github.com/iot-onboarding/mudcerts"
 )
 
 // outExt strips the final extension and replaces it with .p7s.
@@ -100,11 +100,14 @@ func signFile(in string, cert *x509.Certificate, key *ecdsa.PrivateKey) error {
 		return fmt.Errorf("read mud file %s: %w", in, err)
 	}
 	out := outExt.ReplaceAllLiteralString(in, "") + ".p7s"
-	der, err := SignMudFile(string(mudfile), cert, key)
+	der, err := mudcerts.SignMudFile(string(mudfile), cert, key)
 	if err != nil {
 		return fmt.Errorf("sign %s: %w", in, err)
 	}
-	if err := os.WriteFile(out, der, 0o600); err != nil {
+	// G703: out is derived from the operator-supplied input path on the
+	// command line; writing the signature next to it is the documented
+	// behavior of this CLI.
+	if err := os.WriteFile(out, der, 0o600); err != nil { //nolint:gosec
 		return fmt.Errorf("write %s: %w", out, err)
 	}
 	return nil

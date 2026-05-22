@@ -47,7 +47,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	. "github.com/iot-onboarding/mudcerts"
+	mudcerts "github.com/iot-onboarding/mudcerts"
 )
 
 // maxRequestBytes caps the size of any incoming request body. A MUD file
@@ -153,12 +153,12 @@ func printableField(s string, max int) bool {
 // validateProductInfo enforces server-side constraints on every field
 // before any crypto or zip work is performed. Returning a descriptive
 // error lets the caller surface a 400 to the client.
-func validateProductInfo(p ProductInfo) error {
+func validateProductInfo(p mudcerts.ProductInfo) error {
 	if !printableField(p.Model, 64) {
-		return errors.New("Model must be 1-64 printable characters")
+		return errors.New("model must be 1-64 printable characters")
 	}
 	if !printableField(p.Manufacturer, 64) {
-		return errors.New("Manufacturer must be 1-64 printable characters")
+		return errors.New("manufacturer must be 1-64 printable characters")
 	}
 	if len(p.CountryCode) != 2 ||
 		p.CountryCode[0] < 'A' || p.CountryCode[0] > 'Z' ||
@@ -176,7 +176,7 @@ func validateProductInfo(p ProductInfo) error {
 	}
 	u, err := url.Parse(p.MudUrl)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return errors.New("MudUrl must be a valid https:// URL")
+		return errors.New("mudUrl must be a valid https:// URL")
 	}
 	if p.EmailAddress != "" {
 		if !printableField(p.EmailAddress, 254) {
@@ -242,7 +242,7 @@ func httpError(c *gin.Context, status int, msg string, err error) {
 
 // postMUD processes a POST on /mudzip and returns a zip file.
 func postMUD(c *gin.Context) {
-	var pinfo ProductInfo
+	var pinfo mudcerts.ProductInfo
 
 	if err := c.ShouldBindJSON(&pinfo); err != nil {
 		if isBodyTooLarge(err) {
@@ -264,7 +264,7 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
-	cabytes, caPrivKey, err := GenCA(pinfo)
+	cabytes, caPrivKey, err := mudcerts.GenCA(pinfo)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to generate CA", err)
 		return
@@ -276,46 +276,46 @@ func postMUD(c *gin.Context) {
 		return
 	}
 
-	capem := MakePEM(cabytes, "CERTIFICATE")
-	mudcert, mudcertPrivKey, err := MakeMUDcert(pinfo, cacert, caPrivKey)
+	capem := mudcerts.MakePEM(cabytes, "CERTIFICATE")
+	mudcert, mudcertPrivKey, err := mudcerts.MakeMUDcert(pinfo, cacert, caPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to create MUD certificate", err)
 		return
 	}
 
-	mudsigner, mudsignerPrivKey, err := MakeSignerCert(pinfo, cacert, caPrivKey)
+	mudsigner, mudsignerPrivKey, err := mudcerts.MakeSignerCert(pinfo, cacert, caPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to create MUD signer certificate", err)
 		return
 	}
 
-	mudcertpem := MakePEM(mudcert, "CERTIFICATE")
-	mudsignerpem := MakePEM(mudsigner, "CERTIFICATE")
+	mudcertpem := mudcerts.MakePEM(mudcert, "CERTIFICATE")
+	mudsignerpem := mudcerts.MakePEM(mudsigner, "CERTIFICATE")
 	caPrivBytes, err := x509.MarshalECPrivateKey(caPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to marshal CA private key", err)
 		return
 	}
-	caPrivkeyPEM := MakePEM(caPrivBytes, "PRIVATE KEY")
+	caPrivkeyPEM := mudcerts.MakePEM(caPrivBytes, "PRIVATE KEY")
 	mudPrivBytes, err := x509.MarshalECPrivateKey(mudcertPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to marshal MUD private key", err)
 		return
 	}
-	mudPrivKeyPEM := MakePEM(mudPrivBytes, "PRIVATE KEY")
+	mudPrivKeyPEM := mudcerts.MakePEM(mudPrivBytes, "PRIVATE KEY")
 	mudsignerPrivBytes, err := x509.MarshalECPrivateKey(mudsignerPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to marshal MUD signer private key", err)
 		return
 	}
-	mudsignerPrivKeyPEM := MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
+	mudsignerPrivKeyPEM := mudcerts.MakePEM(mudsignerPrivBytes, "PRIVATE KEY")
 
 	mudsigncert, err := x509.ParseCertificate(mudsigner)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to parse MUD signer certificate", err)
 		return
 	}
-	mudsig, err := SignMudFile(string(mudjson), mudsigncert, mudsignerPrivKey)
+	mudsig, err := mudcerts.SignMudFile(string(mudjson), mudsigncert, mudsignerPrivKey)
 	if err != nil {
 		httpError(c, http.StatusInternalServerError, "failed to sign MUD file", err)
 		return
@@ -379,9 +379,13 @@ func postMUD(c *gin.Context) {
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
-	router.SetTrustedProxies(nil)
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("mudzip: SetTrustedProxies: %v", err)
+	}
 	router.Use(limitBody(maxRequestBytes))
 	router.Use(concurrencyLimiter(runtime.NumCPU(), acquireTimeout))
 	router.POST("/mudzip", postMUD)
-	router.Run(":8085")
+	if err := router.Run(":8085"); err != nil {
+		log.Fatalf("mudzip: Run: %v", err)
+	}
 }
