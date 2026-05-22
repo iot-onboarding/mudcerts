@@ -42,7 +42,9 @@ import (
 	"net/mail"
 	"net/url"
 	"regexp"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	. "github.com/iot-onboarding/mudcerts"
@@ -52,6 +54,44 @@ import (
 // plus the surrounding ProductInfo JSON should comfortably fit; anything
 // larger is treated as abuse.
 const maxRequestBytes = 150 * 1024 // 150 KiB
+
+// acquireTimeout bounds how long a request will wait for a concurrency
+// slot before the server gives up and returns 429. Kept short so that
+// clients fail fast under sustained load rather than queueing forever
+// and exhausting server-side resources (sockets, goroutines, memory).
+const acquireTimeout = 100 * time.Millisecond
+
+// concurrencyLimiter returns a gin middleware that admits at most
+// `capacity` concurrent requests through the protected handler chain.
+// Excess requests wait up to `timeout` for a slot to free; if none is
+// available they are rejected with HTTP 429 and a Retry-After header.
+//
+// Each /mudzip request performs three ECDSA key generations plus a CMS
+// sign, all CPU-bound. Without a cap, a handful of concurrent callers
+// can saturate the host (CWE-770). The semaphore here caps in-flight
+// crypto work to a value proportional to available CPUs. Operators are
+// still expected to run this service behind a reverse proxy that
+// enforces per-IP rate limits.
+func concurrencyLimiter(capacity int, timeout time.Duration) gin.HandlerFunc {
+	if capacity < 1 {
+		capacity = 1
+	}
+	sem := make(chan struct{}, capacity)
+	return func(c *gin.Context) {
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+			c.Next()
+		case <-time.After(timeout):
+			c.Header("Retry-After", "1")
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error": "server busy, try again later",
+			})
+		case <-c.Request.Context().Done():
+			c.AbortWithStatus(499) // client closed request
+		}
+	}
+}
 
 // limitBody installs an http.MaxBytesReader on every incoming request so
 // that BindJSON (and any other body reader) cannot exhaust memory.
@@ -341,6 +381,7 @@ func main() {
 	router := gin.Default()
 	router.SetTrustedProxies(nil)
 	router.Use(limitBody(maxRequestBytes))
+	router.Use(concurrencyLimiter(runtime.NumCPU(), acquireTimeout))
 	router.POST("/mudzip", postMUD)
 	router.Run(":8085")
 }
