@@ -85,7 +85,7 @@ func TestSignAllHappyPath(t *testing.T) {
 	}
 
 	sigPath := filepath.Join(dir, "device.p7s")
-	sigBytes, err := os.ReadFile(sigPath)
+	sigBytes, err := os.ReadFile(sigPath) //nolint:gosec // test: sigPath is under t.TempDir()
 	if err != nil {
 		t.Fatalf("read sig: %v", err)
 	}
