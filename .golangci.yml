@@ -1,9 +1,11 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
     - gosec
@@ -11,7 +13,6 @@ linters:
     - govet
     - ineffassign
     - unused
-
-issues:
-  exclude-dirs:
-    - mudmaker
+  exclusions:
+    paths:
+      - mudmaker
