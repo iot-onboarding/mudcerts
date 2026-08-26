@@ -1,6 +1,6 @@
 module github.com/iot-onboarding/mudcerts
 
-go 1.25.0
+go 1.27.0
 
 require (
 	github.com/gin-gonic/gin v1.10.0
